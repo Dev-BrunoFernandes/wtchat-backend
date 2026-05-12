@@ -3,6 +3,7 @@ package br.com.fiap.wtchat.service;
 import br.com.fiap.wtchat.dto.AuthResponse;
 import br.com.fiap.wtchat.dto.LoginRequest;
 import br.com.fiap.wtchat.dto.RegisterRequest;
+import br.com.fiap.wtchat.dto.SocialAuthRequest;
 import br.com.fiap.wtchat.model.User;
 import br.com.fiap.wtchat.repository.UserRepository;
 import br.com.fiap.wtchat.security.JwtUtil;
@@ -13,6 +14,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +58,26 @@ public class AuthService {
 
         auditService.log(user.getId(), user.getEmail(), "LOGIN", "User", user.getId(), "Login realizado");
 
+        return new AuthResponse(token, user.getId(), user.getName(), user.getEmail(), user.getRole().name());
+    }
+
+    public AuthResponse socialLogin(SocialAuthRequest request) {
+        User user = userRepository.findByEmail(request.getEmail()).orElseGet(() -> {
+            User newUser = new User();
+            newUser.setName(request.getName());
+            newUser.setEmail(request.getEmail());
+            newUser.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
+            newUser.setRole(User.Role.CLIENT);
+            userRepository.save(newUser);
+            auditService.log(newUser.getId(), newUser.getEmail(), "SOCIAL_REGISTER",
+                    "User", newUser.getId(), "Cadastro via " + request.getProvider());
+            return newUser;
+        });
+
+        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
+        String token = jwtUtil.generateToken(userDetails, user.getRole().name());
+        auditService.log(user.getId(), user.getEmail(), "SOCIAL_LOGIN",
+                "User", user.getId(), "Login via " + request.getProvider());
         return new AuthResponse(token, user.getId(), user.getName(), user.getEmail(), user.getRole().name());
     }
 }

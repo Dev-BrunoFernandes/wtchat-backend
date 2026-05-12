@@ -3,6 +3,7 @@ package br.com.fiap.wtchat.controller;
 import br.com.fiap.wtchat.dto.AuthResponse;
 import br.com.fiap.wtchat.dto.LoginRequest;
 import br.com.fiap.wtchat.dto.RegisterRequest;
+import br.com.fiap.wtchat.dto.SocialAuthRequest;
 import br.com.fiap.wtchat.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,5 +25,10 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/social")
+    public ResponseEntity<AuthResponse> socialLogin(@Valid @RequestBody SocialAuthRequest request) {
+        return ResponseEntity.ok(authService.socialLogin(request));
     }
 }
