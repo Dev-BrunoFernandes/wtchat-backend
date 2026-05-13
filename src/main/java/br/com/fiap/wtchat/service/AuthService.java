@@ -4,7 +4,9 @@ import br.com.fiap.wtchat.dto.AuthResponse;
 import br.com.fiap.wtchat.dto.LoginRequest;
 import br.com.fiap.wtchat.dto.RegisterRequest;
 import br.com.fiap.wtchat.dto.SocialAuthRequest;
+import br.com.fiap.wtchat.model.PasswordResetToken;
 import br.com.fiap.wtchat.model.User;
+import br.com.fiap.wtchat.repository.PasswordResetTokenRepository;
 import br.com.fiap.wtchat.repository.UserRepository;
 import br.com.fiap.wtchat.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,8 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.Random;
 import java.util.UUID;
 
 @Service
@@ -27,6 +31,8 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
     private final AuditService auditService;
+    private final PasswordResetTokenRepository resetTokenRepository;
+    private final MailService mailService;
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -79,5 +85,41 @@ public class AuthService {
         auditService.log(user.getId(), user.getEmail(), "SOCIAL_LOGIN",
                 "User", user.getId(), "Login via " + request.getProvider());
         return new AuthResponse(token, user.getId(), user.getName(), user.getEmail(), user.getRole().name());
+    }
+
+    public void forgotPassword(String email) {
+        if (userRepository.findByEmail(email).isEmpty()) return;
+
+        resetTokenRepository.deleteByEmail(email);
+
+        String code = String.format("%06d", new Random().nextInt(1000000));
+
+        PasswordResetToken token = new PasswordResetToken();
+        token.setEmail(email);
+        token.setCode(code);
+        token.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        token.setUsed(false);
+        resetTokenRepository.save(token);
+
+        mailService.sendPasswordResetCode(email, code);
+    }
+
+    public void resetPassword(String email, String code, String newPassword) {
+        PasswordResetToken token = resetTokenRepository
+                .findByEmailAndCodeAndUsedFalse(email, code)
+                .orElseThrow(() -> new RuntimeException("Código inválido ou expirado"));
+
+        if (token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Código expirado");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        token.setUsed(true);
+        resetTokenRepository.save(token);
     }
 }
