@@ -1,20 +1,19 @@
 # WTChat Backend
 
-Backend do desafio WTC – FIAP 2025. Plataforma CRM de comunicação com clientes.
+Backend do desafio WTC – FIAP 2025. Plataforma de comunicação com clientes via chat em tempo real.
 
 ## Tecnologias
 
-- Java 17 + Spring Boot 3.2
-- Spring Security + JWT
-- Spring Data MongoDB
-- WebSocket (STOMP) para chat em tempo real
+- Java 21 + Spring Boot 3.2.5
+- Spring Security + JWT (stateless)
+- Spring Data MongoDB (Atlas em produção / Embedded em desenvolvimento)
+- WebSocket STOMP para mensagens em tempo real
 - Lombok
 
 ## Pré-requisitos
 
-- Java 17+
+- Java 21+
 - Maven 3.8+
-- MongoDB rodando na porta 27017 (local ou Atlas)
 
 ## Executando localmente
 
@@ -23,109 +22,175 @@ Backend do desafio WTC – FIAP 2025. Plataforma CRM de comunicação com client
 git clone <repo-url>
 cd wtchat-backend
 
-# 2. Suba o MongoDB (se usar Docker)
-docker run -d -p 27017:27017 --name mongo mongo:7
+# 2. Execute com perfil local (MongoDB embedded — sem instalar nada)
+mvn spring-boot:run -Dspring-boot.run.profiles=local
+```
 
-# 3. Execute
+O servidor sobe em `http://localhost:8081`.
+
+> O perfil `local` utiliza MongoDB embutido (flapdoodle), não requer instalação do MongoDB.
+
+## Executando com MongoDB externo
+
+```bash
+# Defina as variáveis de ambiente
+export MONGODB_URI="mongodb+srv://usuario:senha@cluster.mongodb.net/wtchat"
+export SPRING_PROFILES_ACTIVE=prod
+
 mvn spring-boot:run
 ```
 
-O servidor sobe em `http://localhost:8080`.
+## Variáveis de ambiente (produção)
 
-## Variáveis de configuração
+| Variável | Descrição |
+|---|---|
+| `MONGODB_URI` | URI completa do MongoDB Atlas |
+| `JWT_SECRET` | Chave secreta JWT (mínimo 256 bits) |
+| `PORT` | Porta do servidor (padrão: `8081`) |
+| `SPRING_PROFILES_ACTIVE` | `prod` para Atlas, `local` para embedded |
 
-Arquivo: `src/main/resources/application.properties`
+## Endpoints
 
-| Propriedade | Padrão | Descrição |
-|---|---|---|
-| `spring.data.mongodb.uri` | `mongodb://localhost:27017/wtchat` | URI do MongoDB |
-| `jwt.secret` | (ver arquivo) | Chave secreta JWT (256 bits) |
-| `jwt.expiration` | `86400` | Expiração do token em segundos (24h) |
-| `server.port` | `8080` | Porta do servidor |
+### Autenticação (`/auth`) — público
 
-## Endpoints principais
-
-### Autenticação
 | Método | Rota | Descrição |
 |---|---|---|
 | POST | `/auth/register` | Cadastra novo usuário |
 | POST | `/auth/login` | Autentica e retorna JWT |
+| POST | `/auth/social` | Login/cadastro via provedor social |
 
-**Login body:**
+**POST /auth/register**
 ```json
-{ "email": "user@email.com", "password": "123456" }
+{ "name": "João Silva", "email": "joao@email.com", "password": "123456", "role": "CLIENT" }
+```
+> `role`: `CLIENT` ou `OPERATOR`
+
+**POST /auth/login**
+```json
+{ "email": "joao@email.com", "password": "123456" }
 ```
 
-**Register body:**
+**POST /auth/social**
 ```json
-{ "name": "Nome", "email": "user@email.com", "password": "123456", "role": "CLIENT" }
+{ "provider": "google", "email": "joao@gmail.com", "name": "João Silva" }
 ```
 
-> `role` pode ser `CLIENT` ou `OPERATOR`
+**Resposta de autenticação (todos os endpoints acima):**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "userId": "6649abc...",
+  "name": "João Silva",
+  "email": "joao@email.com",
+  "role": "CLIENT"
+}
+```
 
-### Chat & Mensagens
-| Método | Rota | Descrição | Auth |
+---
+
+### Usuários (`/users`) — requer JWT
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/users?search=termo` | Busca usuários por nome ou email |
+
+---
+
+### Mensagens — requer JWT
+
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/messages` | Envia mensagem |
+| GET | `/inbox/{userId}` | Caixa de entrada do usuário |
+| GET | `/conversation/{otherUserId}` | Conversa 1:1 com outro usuário |
+| PATCH | `/messages/{id}/read` | Marca mensagem como lida |
+
+**POST /messages**
+```json
+{ "recipientId": "6649abc...", "content": "Olá!", "type": "TEXT" }
+```
+
+---
+
+### CRM – Clientes — requer JWT
+
+| Método | Rota | Role | Descrição |
 |---|---|---|---|
-| POST | `/messages` | Envia mensagem (também via WebSocket) | Sim |
-| GET | `/inbox/{userId}` | Caixa de entrada | Sim |
-| GET | `/conversation/{otherUserId}` | Conversa 1:1 | Sim |
-| PATCH | `/messages/{id}/read` | Marca como lida | Sim |
+| GET | `/customers` | AUTH | Lista (`?search=&status=`) |
+| POST | `/customers` | OPERATOR | Cria cliente |
+| PUT | `/customers/{id}` | OPERATOR | Atualiza cliente |
+| DELETE | `/customers/{id}` | OPERATOR | Remove cliente |
+| GET | `/customers/{id}/timeline` | AUTH | Perfil 360° |
 
-### CRM – Clientes
-| Método | Rota | Descrição | Role |
-|---|---|---|---|
-| GET | `/customers` | Lista clientes (`?search=&status=`) | AUTH |
-| POST | `/customers` | Cria cliente | OPERATOR |
-| PUT | `/customers/{id}` | Atualiza cliente | OPERATOR |
-| DELETE | `/customers/{id}` | Remove cliente | OPERATOR |
-| GET | `/customers/{id}/timeline` | Perfil 360° | AUTH |
+---
 
-### Segmentos
-| Método | Rota | Descrição | Role |
-|---|---|---|---|
-| GET | `/segments` | Lista segmentos | AUTH |
-| POST | `/segments` | Cria segmento | OPERATOR |
-| PUT | `/segments/{id}` | Atualiza | OPERATOR |
-| DELETE | `/segments/{id}` | Remove | OPERATOR |
+### Segmentos — requer JWT
 
-### Campanhas
-| Método | Rota | Descrição | Role |
-|---|---|---|---|
-| POST | `/campaigns` | Cria campanha | OPERATOR |
-| POST | `/campaigns/{id}/send` | Dispara campanha | OPERATOR |
-| POST | `/campaigns/{id}/schedule` | Agenda campanha | OPERATOR |
-| GET | `/campaigns` | Lista campanhas | OPERATOR |
+| Método | Rota | Role |
+|---|---|---|
+| GET | `/segments` | AUTH |
+| POST | `/segments` | OPERATOR |
+| PUT | `/segments/{id}` | OPERATOR |
+| DELETE | `/segments/{id}` | OPERATOR |
 
-### Auditoria & Logs
-| Método | Rota | Descrição | Role |
-|---|---|---|---|
-| GET | `/audit` | Todos os logs | OPERATOR |
-| GET | `/audit/user/{userId}` | Logs por usuário | OPERATOR |
+---
 
-## WebSocket (Diferencial)
+### Campanhas — requer JWT OPERATOR
 
-Endpoint: `ws://localhost:8080/ws-native/websocket`
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/campaigns` | Cria campanha |
+| POST | `/campaigns/{id}/send` | Dispara campanha para segmento |
+| GET | `/campaigns` | Lista campanhas |
 
-Após conectar com STOMP + header `Authorization: Bearer <token>`:
+---
 
-- **Receber mensagens:** subscribe em `/user/{userId}/queue/messages`
-- **Receber campanhas:** subscribe em `/user/{userId}/queue/campaigns`
-- **Enviar mensagens:** send para `/app/chat.send`
+### Auditoria — requer JWT OPERATOR
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/audit` | Todos os logs |
+| GET | `/audit/user/{userId}` | Logs por usuário |
+
+---
+
+## WebSocket (tempo real)
+
+**Endpoint:** `wss://web-production-d961e.up.railway.app/ws-native/websocket`
+
+Após conectar com cliente STOMP, enviar header:
+```
+Authorization: Bearer <token>
+```
+
+| Operação | Destino STOMP |
+|---|---|
+| Enviar mensagem | `/app/chat.send` |
+| Receber mensagens | `/user/{userId}/queue/messages` |
+| Receber campanhas | `/user/{userId}/queue/campaigns` |
+
+---
 
 ## Modelo de Dados (MongoDB)
 
 ```
-users         → id, name, email, password, role, createdAt
-customers     → id, userId, name, email, phone, segmentId, tags[], score, status, notes[]
-segments      → id, name, description, customerIds[]
-messages      → id, senderId, recipientId, content, type, status, actions[], createdAt, readAt
-campaigns     → id, title, body, url, segmentId, actions[], status, sentAt, createdBy
-audit_logs    → id, userId, userEmail, action, resource, resourceId, details, timestamp
+users        → id, name, email, password(hash), role, createdAt
+messages     → id, senderId, recipientId, content, type, status, actions[], createdAt, readAt
+customers    → id, name, email, phone, segmentId, tags[], score, status, notes[]
+segments     → id, name, description, customerIds[]
+campaigns    → id, title, body, url, segmentId, actions[], status, sentAt, createdBy
+audit_logs   → id, userId, userEmail, action, resource, resourceId, details, timestamp
 ```
 
-## Autenticação no Swagger/Postman
+## Autenticação nas requisições
 
-Adicione o header em todas as requisições autenticadas:
+Adicione o header em todas as rotas protegidas:
 ```
 Authorization: Bearer <token_jwt>
 ```
+
+## Deploy em produção
+
+O backend está publicado em: `https://web-production-d961e.up.railway.app`
+
+Plataforma: **Railway** | Banco: **MongoDB Atlas** (região São Paulo)
