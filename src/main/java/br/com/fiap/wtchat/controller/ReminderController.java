@@ -65,7 +65,11 @@ public class ReminderController {
     ) {
         String userId = resolveUserId(userDetails);
         reminderRepository.findById(id).ifPresent(r -> {
-            if (r.getUserId().equals(userId)) reminderRepository.delete(r);
+            boolean isOwner = r.getUserId().equals(userId);
+            boolean isParticipant = r.getParticipants() != null && r.getParticipants().contains(userId);
+            if (isOwner || isParticipant) {
+                reminderRepository.delete(r);
+            }
         });
         return ResponseEntity.noContent().build();
     }
