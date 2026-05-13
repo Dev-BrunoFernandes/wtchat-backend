@@ -28,8 +28,8 @@ public class ReminderController {
     ) {
         String userId = resolveUserId(userDetails);
         List<Reminder> result = (date != null && !date.isBlank())
-                ? reminderRepository.findByUserIdAndDateOrderByTimeAsc(userId, date)
-                : reminderRepository.findByUserIdOrderByDateAscTimeAsc(userId);
+                ? reminderRepository.findByDateForUser(date, userId)
+                : reminderRepository.findAllForUser(userId);
         return ResponseEntity.ok(result);
     }
 
@@ -48,6 +48,13 @@ public class ReminderController {
         reminder.setAddress(request.getAddress());
         reminder.setDuration(request.getDuration());
         reminder.setNote(request.getNote());
+        reminder.setOwnerName(userRepository.findByEmail(userDetails.getUsername())
+                .map(u -> u.getName()).orElse(""));
+        if (request.getParticipants() != null) {
+            reminder.setParticipants(request.getParticipants());
+        } else {
+            reminder.setParticipants(new java.util.ArrayList<>());
+        }
         return ResponseEntity.ok(reminderRepository.save(reminder));
     }
 

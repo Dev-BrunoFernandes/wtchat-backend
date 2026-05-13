@@ -34,4 +34,12 @@ public class UserController {
         }
         return ResponseEntity.ok(result);
     }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<UserResponse> getById(@PathVariable String id) {
+        return userRepository.findById(id)
+                .map(UserResponse::from)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
 }

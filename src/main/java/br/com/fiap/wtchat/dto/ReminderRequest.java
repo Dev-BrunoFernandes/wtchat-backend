@@ -3,6 +3,8 @@ package br.com.fiap.wtchat.dto;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class ReminderRequest {
 
@@ -20,4 +22,5 @@ public class ReminderRequest {
     private String address;
     private String duration;
     private String note;
+    private List<String> participants;
 }
