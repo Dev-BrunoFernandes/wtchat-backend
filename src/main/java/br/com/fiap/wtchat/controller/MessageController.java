@@ -8,9 +8,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 import java.util.List;
 
@@ -20,6 +23,7 @@ public class MessageController {
 
     private final MessageService messageService;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @PostMapping("/messages")
     public ResponseEntity<Message> send(@RequestBody MessageRequest request,
@@ -57,6 +61,19 @@ public class MessageController {
         if (userDetails != null) {
             String senderId = resolveUserId(userDetails);
             messageService.send(senderId, request);
+        }
+    }
+
+    // WebSocket: indicador de digitação
+    @MessageMapping("/chat.typing")
+    public void handleTyping(@Payload Map<String, String> payload,
+                             @AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) return;
+        String recipientId = payload.get("recipientId");
+        if (recipientId != null && !recipientId.isBlank()) {
+            messagingTemplate.convertAndSendToUser(
+                    recipientId, "/queue/typing",
+                    Map.of("senderId", resolveUserId(userDetails)));
         }
     }
 
