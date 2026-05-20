@@ -29,10 +29,9 @@ public class MessageService {
         message.setImageUrl(request.getImageUrl());
         messageRepository.save(message);
 
-        // WebSocket: entrega em tempo real ao destinatário
-        messagingTemplate.convertAndSendToUser(
-                request.getRecipientId(),
-                "/queue/messages",
+        // WebSocket: entrega em tempo real ao destinatário (path explícito com mongoId)
+        messagingTemplate.convertAndSend(
+                "/user/" + request.getRecipientId() + "/queue/messages",
                 message
         );
 

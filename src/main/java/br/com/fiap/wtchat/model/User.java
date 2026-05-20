@@ -23,6 +23,11 @@ public class User {
 
     private Role role;
 
+    private String phone;
+    private String position;
+    private String company;
+    private String avatarUrl;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public enum Role {

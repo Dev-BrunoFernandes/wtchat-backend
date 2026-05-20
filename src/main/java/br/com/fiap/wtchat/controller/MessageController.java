@@ -71,8 +71,8 @@ public class MessageController {
         if (userDetails == null) return;
         String recipientId = payload.get("recipientId");
         if (recipientId != null && !recipientId.isBlank()) {
-            messagingTemplate.convertAndSendToUser(
-                    recipientId, "/queue/typing",
+            messagingTemplate.convertAndSend(
+                    "/user/" + recipientId + "/queue/typing",
                     Map.of("senderId", resolveUserId(userDetails)));
         }
     }
